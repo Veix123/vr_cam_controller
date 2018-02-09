@@ -1,0 +1,10 @@
+<launch>
+
+  <include file="$(find spacenav_node)/launch/classic.launch" />
+
+  <node name="demuxer" pkg="spacenav_demuxer" type="spacenav_demuxer" output="screen" />
+  
+  <node name="vr_cam_controller" pkg="vr_cam_controller" type="vr_cam_controller" output="screen" >
+    <param name="spacenav_topic" value="/demuxer/cam_joy"/>
+  </node>
+</launch>
