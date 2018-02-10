@@ -7,4 +7,6 @@
   <node name="vr_cam_controller" pkg="vr_cam_controller" type="vr_cam_controller" output="screen" >
     <param name="spacenav_topic" value="/demuxer/cam_joy"/>
   </node>
+
+  <node name="rviz_node" pkg="rviz" type="rviz" output="screen"/>
 </launch>

@@ -35,10 +35,9 @@
 
 #include <tf2/LinearMath/Transform.h>
 #include <tf2/LinearMath/Quaternion.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 CamController::CamController()
-  : nh_("~")
+  : nh_("~"), last_time_(0)
 {
   // subscribe to spacenav joy events
   std::string topic = "/spacenav_demuxer/cam_joy";
@@ -47,6 +46,9 @@ CamController::CamController()
 
   my_parent_frame_ = "world";
   nh_.getParam("parent_frame", my_parent_frame_);
+
+  //start with an identity transform
+  integrated_tf_.setIdentity();
 }
 
 CamController::~CamController()
@@ -56,18 +58,48 @@ CamController::~CamController()
 
 void CamController::joyCallback(const sensor_msgs::Joy::ConstPtr& msg)
 {
-  geometry_msgs::TransformStamped ts;
-  ts.header.stamp = ros::Time::now();
-  ts.header.frame_id = my_parent_frame_;
-  ts.child_frame_id = "vr_cam";
-  tf2::Quaternion q;
-  q.setRPY(0.1,0,0);
-  ts.transform.translation.x = msg->axes[0];
-  ts.transform.rotation = tf2::toMsg(q);
+  double dt = (ros::Time::now() - last_time_).toSec();
 
+  // continue only if dt is available (more than 1 msg is arrived)
+  if (last_time_ == ros::Time(0))
+  {
+    last_time_ = ros::Time::now();
+    return;
+  }
+  last_time_ = ros::Time::now();
 
-  br_.sendTransform(ts);
+  tf2::Quaternion delta_rotation;
+  delta_rotation.setRPY(0, msg->axes[2]*MAX_ANG_VEL*dt, msg->axes[1]*MAX_ANG_VEL*dt);
+  //delta_rotation *= MAX_ANG_VEL * dt;
+  tf2::Vector3 delta_origin(msg->axes[0], 0, 0);
+  delta_origin *= MAX_LIN_VEL * dt;
+  tf2::Transform delta_tf(delta_rotation, delta_origin);
 
+  integrated_tf_ *= delta_tf;
+  tf2::Transform tmp_tf(integrated_tf_.getRotation().inverse(), tf2::Vector3(0,0,0));
+
+ // // Translate first and then rotate along the sphere
+ // tf2::Transform trans1(integrated_tf_.getRotation(), tf2::Vector3(0,0,0));
+ // tf2::Vector3 rotated_pos = trans1 * integrated_tf_.getOrigin();
+ // tf2::Transform cam_tf(integrated_tf_.getRotation(), rotated_pos);
+//-------------------------------------------
+//   tf2::Vector3 speed_vec(msg->axes[0] * MAX_LIN_SPEED, msg->axes[1] * MAX_ANG_SPEED,
+//                          msg->axes[2] * MAX_ANG_SPEED);
+//   integrated_vec_ += speed_vec * dt;
+// 
+//   tf2::Quaternion q;
+//   q.setRPY(0, integrated_vec_.z(), -integrated_vec_.y());
+//   tf2::Transform trans1(q,tf2::Vector3());
+//   tf2::Vector3 pos = trans1 * tf2::Vector3(integrated_vec_.x(), 0, 0);
+//   tf2::Transform trans(q, pos);
+
+  geometry_msgs::TransformStamped ts_msg;
+  ts_msg.header.stamp = ros::Time::now();
+  ts_msg.header.frame_id = my_parent_frame_;
+  ts_msg.child_frame_id = "vr_cam";
+  ts_msg.transform = toMsg(tmp_tf*integrated_tf_);
+
+  br_.sendTransform(ts_msg);
 }
 
 int main(int argc, char* argv[])

@@ -32,9 +32,14 @@
 #define VR_CAM_CONTROLLER_H
 
 #include <ros/ros.h>
+#include <string>
 #include "sensor_msgs/Joy.h"
 #include <tf2_ros/transform_broadcaster.h>
-#include <string>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+
+#define MAX_LIN_VEL 2
+#define MAX_ANG_VEL 0.5
+#define MIN_DIST 0.2
 
 class CamController
 {
@@ -54,5 +59,8 @@ private:
   tf2_ros::TransformBroadcaster br_;
 
   std::string my_parent_frame_;
+  ros::Time last_time_;
+
+  tf2::Transform integrated_tf_;
 };
 #endif
