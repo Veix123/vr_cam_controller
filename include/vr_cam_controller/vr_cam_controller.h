@@ -62,5 +62,7 @@ private:
   ros::Time last_time_;
 
   tf2::Transform integrated_tf_;
+  tf2::Quaternion rotation_;
+  tf2::Vector3 origin_;
 };
 #endif

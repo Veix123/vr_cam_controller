@@ -49,6 +49,7 @@ CamController::CamController()
 
   //start with an identity transform
   integrated_tf_.setIdentity();
+  rotation_ = tf2::Quaternion::getIdentity();
 }
 
 CamController::~CamController()
@@ -68,37 +69,26 @@ void CamController::joyCallback(const sensor_msgs::Joy::ConstPtr& msg)
   }
   last_time_ = ros::Time::now();
 
+  // Integrate differential sensor data
   tf2::Quaternion delta_rotation;
-  delta_rotation.setRPY(0, msg->axes[2]*MAX_ANG_VEL*dt, msg->axes[1]*MAX_ANG_VEL*dt);
-  //delta_rotation *= MAX_ANG_VEL * dt;
+  delta_rotation.setRPY(0, msg->axes[2] * MAX_ANG_VEL * dt, -msg->axes[1] * MAX_ANG_VEL * dt);
   tf2::Vector3 delta_origin(msg->axes[0], 0, 0);
   delta_origin *= MAX_LIN_VEL * dt;
-  tf2::Transform delta_tf(delta_rotation, delta_origin);
+  origin_ += delta_origin;
+  rotation_ *= delta_rotation;
 
-  integrated_tf_ *= delta_tf;
-  tf2::Transform tmp_tf(integrated_tf_.getRotation().inverse(), tf2::Vector3(0,0,0));
+  // This rotates the origin_ vector with respect to the integrated y() and z() data
+  tf2::Vector3 orig_rot = tf2::quatRotate(rotation_, origin_);
 
- // // Translate first and then rotate along the sphere
- // tf2::Transform trans1(integrated_tf_.getRotation(), tf2::Vector3(0,0,0));
- // tf2::Vector3 rotated_pos = trans1 * integrated_tf_.getOrigin();
- // tf2::Transform cam_tf(integrated_tf_.getRotation(), rotated_pos);
-//-------------------------------------------
-//   tf2::Vector3 speed_vec(msg->axes[0] * MAX_LIN_SPEED, msg->axes[1] * MAX_ANG_SPEED,
-//                          msg->axes[2] * MAX_ANG_SPEED);
-//   integrated_vec_ += speed_vec * dt;
-// 
-//   tf2::Quaternion q;
-//   q.setRPY(0, integrated_vec_.z(), -integrated_vec_.y());
-//   tf2::Transform trans1(q,tf2::Vector3());
-//   tf2::Vector3 pos = trans1 * tf2::Vector3(integrated_vec_.x(), 0, 0);
-//   tf2::Transform trans(q, pos);
+  // Build final transformation for camera by using the point we just rotated
+  tf2::Transform cam_tf(rotation_, orig_rot);
 
+  // Prepare tf message and publish it
   geometry_msgs::TransformStamped ts_msg;
   ts_msg.header.stamp = ros::Time::now();
   ts_msg.header.frame_id = my_parent_frame_;
   ts_msg.child_frame_id = "vr_cam";
-  ts_msg.transform = toMsg(tmp_tf*integrated_tf_);
-
+  ts_msg.transform = toMsg(cam_tf);
   br_.sendTransform(ts_msg);
 }
 
