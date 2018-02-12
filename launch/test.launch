@@ -8,5 +8,5 @@
     <param name="spacenav_topic" value="/demuxer/cam_joy"/>
   </node>
 
-  <node name="rviz_node" pkg="rviz" type="rviz" output="screen"/>
+  <node name="rviz_node" pkg="rviz" type="rviz" output="screen" args="-d $(find vr_cam_controller)/conf/vr_cam_controller.rviz"/>
 </launch>

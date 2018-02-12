@@ -35,6 +35,7 @@
 
 #include <tf2/LinearMath/Transform.h>
 #include <tf2/LinearMath/Quaternion.h>
+#include <math.h>
 
 CamController::CamController()
   : nh_("~"), last_time_(0)
@@ -48,8 +49,11 @@ CamController::CamController()
   nh_.getParam("parent_frame", my_parent_frame_);
 
   //start with an identity transform
-  integrated_tf_.setIdentity();
-  rotation_ = tf2::Quaternion::getIdentity();
+//  integrated_tf_.setIdentity();
+//  rotation_ = tf2::Quaternion::getIdentity();
+  integrated_r_ = 0.5;
+  integrated_phi_ = M_PI;
+  integrated_theta_ = 0;
 }
 
 CamController::~CamController()
@@ -69,19 +73,23 @@ void CamController::joyCallback(const sensor_msgs::Joy::ConstPtr& msg)
   }
   last_time_ = ros::Time::now();
 
-  // Integrate differential sensor data
-  tf2::Quaternion delta_rotation;
-  delta_rotation.setRPY(0, msg->axes[2] * MAX_ANG_VEL * dt, -msg->axes[1] * MAX_ANG_VEL * dt);
-  tf2::Vector3 delta_origin(msg->axes[0], 0, 0);
-  delta_origin *= MAX_LIN_VEL * dt;
-  origin_ += delta_origin;
-  rotation_ *= delta_rotation;
+  // Integrate differenital sensor data by considering limits
+  integrated_r_ -= msg->axes[0] * MAX_LIN_VEL * dt;
+  integrated_theta_ += msg->axes[2] * MAX_ANG_VEL * dt;
+  integrated_phi_ -= msg->axes[1] * MAX_ANG_VEL * dt;
 
-  // This rotates the origin_ vector with respect to the integrated y() and z() data
-  tf2::Vector3 orig_rot = tf2::quatRotate(rotation_, origin_);
+  integrated_r_ = std::max(integrated_r_, R_LIMIT);
+  integrated_theta_ = std::max(integrated_theta_, -THETA_LIMIT);
+  integrated_theta_ = std::min(integrated_theta_, THETA_LIMIT);
 
-  // Build final transformation for camera by using the point we just rotated
-  tf2::Transform cam_tf(rotation_, orig_rot);
+  double pos_x = integrated_r_ * std::cos(integrated_theta_) * std::cos(integrated_phi_);
+  double pos_y = integrated_r_ * std::cos(integrated_theta_) * std::sin(integrated_phi_);
+  double pos_z = integrated_r_ * std::sin(integrated_theta_);
+  
+  tf2::Quaternion rotation;
+  rotation.setRPY(0, integrated_theta_, integrated_phi_- M_PI);
+
+  tf2::Transform cam_tf(rotation, tf2::Vector3(pos_x, pos_y, pos_z));
 
   // Prepare tf message and publish it
   geometry_msgs::TransformStamped ts_msg;

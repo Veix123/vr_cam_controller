@@ -37,9 +37,15 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
-#define MAX_LIN_VEL 2
-#define MAX_ANG_VEL 0.5
-#define MIN_DIST 0.2
+#define MAX_LIN_VEL 2.0
+#define MAX_ANG_VEL 1.0
+
+// Close-up limit to prevent moving through the tracked object
+#define R_LIMIT 0.2
+
+// Limit up and down motions to be less that PI from the horizon
+// This will prevent singularities at upper and lower poles
+#define THETA_LIMIT 0.9 * M_PI / 2
 
 class CamController
 {
@@ -61,8 +67,8 @@ private:
   std::string my_parent_frame_;
   ros::Time last_time_;
 
-  tf2::Transform integrated_tf_;
-  tf2::Quaternion rotation_;
-  tf2::Vector3 origin_;
+  double integrated_r_;
+  double integrated_phi_;
+  double integrated_theta_;
 };
 #endif
